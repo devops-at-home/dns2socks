@@ -10,6 +10,7 @@ static TUN_QUIT: std::sync::Mutex<Option<tokio_util::sync::CancellationToken>> =
 /// - listen_addr: the listen address, e.g. "0.0.0.0:53", or null to use the default value
 /// - dns_remote_server: the dns remote server, e.g. "8.8.8.8:53", or null to use the default value
 /// - socks5_settings: the socks5 server, e.g. "socks5://[username[:password]@]host:port", or null to use the default value
+/// - cluster_dns: optional cluster-local DNS server, e.g. "10.96.0.10:53", or null to disable
 /// - force_tcp: whether to force tcp, true or false, default is false
 /// - cache_records: whether to cache dns records, true or false, default is false
 /// - verbosity: the verbosity level, see ArgVerbosity enum, default is ArgVerbosity::Info
@@ -19,6 +20,7 @@ pub unsafe extern "C" fn dns2socks_start(
     listen_addr: *const c_char,
     dns_remote_server: *const c_char,
     socks5_settings: *const c_char,
+    cluster_dns: *const c_char,
     force_tcp: bool,
     cache_records: bool,
     verbosity: ArgVerbosity,
@@ -73,6 +75,15 @@ pub unsafe extern "C" fn dns2socks_start(
             return -8;
         };
         config.socks5_settings(proxy_settings);
+    }
+    if !cluster_dns.is_null() {
+        let Ok(cluster_dns_str) = unsafe { std::ffi::CStr::from_ptr(cluster_dns) }.to_str() else {
+            return -11;
+        };
+        let Ok(addr) = cluster_dns_str.parse() else {
+            return -12;
+        };
+        config.cluster_dns(Some(addr));
     }
 
     let main_loop = async move {

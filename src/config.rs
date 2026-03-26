@@ -19,6 +19,10 @@ pub struct Config {
     #[arg(short, long, value_parser = |s: &str| ArgProxy::try_from(s), value_name = "URL", default_value = "socks5://127.0.0.1:1080")]
     pub socks5_settings: ArgProxy,
 
+    /// Cluster-local DNS server (bypasses SOCKS5 for *.svc.cluster.local queries)
+    #[clap(short = 'k', long, value_name = "IP:port")]
+    pub cluster_dns: Option<SocketAddr>,
+
     /// Force to use TCP to proxy DNS query
     #[clap(short, long)]
     pub force_tcp: bool,
@@ -42,6 +46,7 @@ impl Default for Config {
             listen_addr: "0.0.0.0:53".parse().unwrap(),
             dns_remote_server: "8.8.8.8:53".parse().unwrap(),
             socks5_settings: ArgProxy::default(),
+            cluster_dns: None,
             force_tcp: false,
             cache_records: false,
             verbosity: ArgVerbosity::default(),
@@ -67,6 +72,11 @@ impl Config {
 
     pub fn socks5_settings(&mut self, socks5_settings: ArgProxy) -> &mut Self {
         self.socks5_settings = socks5_settings;
+        self
+    }
+
+    pub fn cluster_dns(&mut self, cluster_dns: Option<SocketAddr>) -> &mut Self {
+        self.cluster_dns = cluster_dns;
         self
     }
 
