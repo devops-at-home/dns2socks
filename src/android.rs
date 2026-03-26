@@ -57,9 +57,7 @@ pub unsafe extern "C" fn Java_com_github_shadowsocks_bg_Dns2socks_start(
             Ok(addr) => addr,
             Err(_e) => "socks5://127.0.0.1:1080".to_string(),
         };
-        let cluster_dns_addr: Option<std::net::SocketAddr> = get_java_string(env, &cluster_dns)
-            .ok()
-            .and_then(|s| s.parse().ok());
+        let cluster_dns_addr: Option<std::net::SocketAddr> = get_java_string(env, &cluster_dns).ok().and_then(|s| s.parse().ok());
         let timeout = if timeout < 3 { 5 } else { timeout as u64 };
 
         let shutdown_token = tokio_util::sync::CancellationToken::new();
