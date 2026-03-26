@@ -35,6 +35,7 @@ Options:
   -d, --dns-remote-server <IP:port>  Remote DNS server address [default: 8.8.8.8:53]
   -s, --socks5-settings <URL>        SOCKS5 URL in the form socks5://[username[:password]@]host:port, Username and password are encoded in percent
                                      encoding. For example: socks5://myname:pass%40word@127.0.0.1:1080 [default: socks5://127.0.0.1:1080]
+  -k, --cluster-dns <IP:port>        Cluster-local DNS server (bypasses SOCKS5 for *.svc.cluster.local queries)
   -f, --force-tcp                    Force to use TCP to proxy DNS query
   -c, --cache-records                Cache DNS query records
   -v, --verbosity <level>            Verbosity level [default: info] [possible values: off, error, warn, info, debug, trace]

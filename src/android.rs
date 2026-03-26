@@ -16,6 +16,7 @@ static TUN_QUIT: std::sync::Mutex<Option<tokio_util::sync::CancellationToken>> =
 /// - listen_addr: the listen address, e.g. "172.19.0.1:53", or null to use the default value
 /// - dns_remote_server: the dns remote server, e.g. "8.8.8.8:53", or null to use the default value
 /// - socks5_settings: the socks5 server, e.g. "socks5://[username[:password]@]host:port", or null to use the default value
+/// - cluster_dns: optional cluster-local DNS server, e.g. "10.96.0.10:53", or empty string to disable
 /// - force_tcp: whether to force tcp, true or false, default is false
 /// - cache_records: whether to cache dns records, true or false, default is false
 /// - verbosity: the verbosity level, see ArgVerbosity enum, default is ArgVerbosity::Info
@@ -27,6 +28,7 @@ pub unsafe extern "C" fn Java_com_github_shadowsocks_bg_Dns2socks_start(
     listen_addr: JString<'_>,
     dns_remote_server: JString<'_>,
     socks5_settings: JString<'_>,
+    cluster_dns: JString<'_>,
     force_tcp: jboolean,
     cache_records: jboolean,
     verbosity: jint,
@@ -55,6 +57,7 @@ pub unsafe extern "C" fn Java_com_github_shadowsocks_bg_Dns2socks_start(
             Ok(addr) => addr,
             Err(_e) => "socks5://127.0.0.1:1080".to_string(),
         };
+        let cluster_dns_addr: Option<std::net::SocketAddr> = get_java_string(env, &cluster_dns).ok().and_then(|s| s.parse().ok());
         let timeout = if timeout < 3 { 5 } else { timeout as u64 };
 
         let shutdown_token = tokio_util::sync::CancellationToken::new();
@@ -75,7 +78,8 @@ pub unsafe extern "C" fn Java_com_github_shadowsocks_bg_Dns2socks_start(
                 .cache_records(cache_records)
                 .listen_addr(listen_addr.parse().map_err(std::io::Error::other)?)
                 .dns_remote_server(dns_remote_server.parse()?)
-                .socks5_settings(ArgProxy::try_from(socks5_settings.as_str()).map_err(std::io::Error::other)?);
+                .socks5_settings(ArgProxy::try_from(socks5_settings.as_str()).map_err(std::io::Error::other)?)
+                .cluster_dns(cluster_dns_addr);
 
             if let Err(err) = main_entry(cfg, shutdown_token).await {
                 log::error!("main loop error: {}", err);

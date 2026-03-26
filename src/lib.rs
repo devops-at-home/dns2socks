@@ -112,6 +112,22 @@ async fn udp_incoming_handler(
         return Ok(());
     }
 
+    if let Some(cluster_addr) = opt.cluster_dns.filter(|_| is_cluster_local(&domain)) {
+        let mut tcp_buf = (buf.len() as u16).to_be_bytes().to_vec();
+        tcp_buf.extend_from_slice(&buf);
+        let resp = tcp_direct(cluster_addr, &tcp_buf, timeout)
+            .await
+            .map_err(|e| format!("direct cluster query \"{domain}\" {e}"))?;
+        let message = dns::parse_data_to_dns_message(&resp, true)?;
+        let msg_buf = message.to_vec().map_err(|e| e.to_string())?;
+        listener.send_to(&msg_buf, &src).await?;
+        log_dns_message("DNS query via cluster-direct", &domain, &message);
+        if opt.cache_records {
+            dns_cache_put_message(&cache, &message).await;
+        }
+        return Ok(());
+    }
+
     let proxy_addr = opt.socks5_settings.addr;
     let dest_addr = opt.dns_remote_server;
 
@@ -189,6 +205,19 @@ async fn handle_tcp_incoming(
         return Ok(());
     }
 
+    if let Some(cluster_addr) = opt.cluster_dns.filter(|_| is_cluster_local(&domain)) {
+        let response_buf = tcp_direct(cluster_addr, &buf[..n], timeout)
+            .await
+            .map_err(|e| format!("direct cluster query \"{domain}\" {e}"))?;
+        incoming.write_all(&response_buf).await?;
+        let message = dns::parse_data_to_dns_message(&response_buf, true)?;
+        log_dns_message("DNS query via cluster-direct TCP", &domain, &message);
+        if opt.cache_records {
+            dns_cache_put_message(&cache, &message).await;
+        }
+        return Ok(());
+    }
+
     let proxy_addr = opt.socks5_settings.addr;
     let target_server = opt.dns_remote_server;
     let response_buf = tcp_via_socks5_server(proxy_addr, target_server, auth, &buf[..n], timeout).await?;
@@ -203,6 +232,29 @@ async fn handle_tcp_incoming(
     }
 
     Ok(())
+}
+
+fn is_cluster_local(domain: &str) -> bool {
+    let domain = domain.trim_end_matches('.');
+    let suffix = ".svc.cluster.local";
+    domain.len() > suffix.len() && domain.to_ascii_lowercase().ends_with(suffix)
+}
+
+async fn tcp_direct(target_server: std::net::SocketAddr, buf: &[u8], timeout: Duration) -> Result<Vec<u8>> {
+    let mut stream = BufStream::new(TcpStream::connect(target_server).await?);
+    stream.write_all(buf).await?;
+    stream.flush().await?;
+
+    let mut len_buf = [0u8; 2];
+    tokio::time::timeout(timeout, stream.read_exact(&mut len_buf)).await??;
+    let len = u16::from_be_bytes(len_buf) as usize;
+
+    let mut msg_buf = vec![0u8; len];
+    tokio::time::timeout(timeout, stream.read_exact(&mut msg_buf)).await??;
+
+    let mut response_buf = len_buf.to_vec();
+    response_buf.extend(msg_buf);
+    Ok(response_buf)
 }
 
 async fn tcp_via_socks5_server<A, B>(
