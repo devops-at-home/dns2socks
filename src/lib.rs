@@ -80,7 +80,7 @@ pub(crate) async fn udp_thread(opt: Config, user_key: Option<UserKey>, cache: Ca
             buf.resize(len, 0);
             tokio::spawn(async move {
                 if let Err(e) = udp_incoming_handler(listener, buf, src, opt, cache, auth, timeout).await {
-                    log::error!("DNS query via UDP incoming handler error \"{}\"", e);
+                    log::error!("DNS query error \"{}\"", e);
                 }
             });
             Ok::<(), Error>(())
